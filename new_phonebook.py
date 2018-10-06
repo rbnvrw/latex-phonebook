@@ -8,21 +8,24 @@ from os import path
 title = "Luck's Telefoonboek".upper()
 frontpage_header = 'MOBIELE NUMMERS'
 cellular_txt = 'Mobiel:'
+min_per_page = 8
+max_per_page = 15
 
 @click.command()
 @click.option('--csv-file', help="Path to phone numbers in CSV format")
 def new_phonebook(csv_file):
     savedir = path.dirname(csv_file)
 
-    numbers = pd.read_csv(csv_file, dtype={'name': str, 'phone': str, 'cellular': str, 'sort': str, 'frontpage': str})
+    numbers = pd.read_csv(csv_file, dtype={'name': str, 'phone': str, 'cellular': str, 'sort': str, 'frontpage': str, 'notes': str})
     numbers = numbers.fillna('')
 
     frontpage, rest = process_numbers(numbers)
 
     latex_source = r'''
-        \documentclass[a5paper]{article}
+        \documentclass[a5paper,12pt]{article}
         \usepackage[a5paper]{geometry}
         \usepackage{ltablex}
+        \usepackage{multirow}
 
         \usepackage[table]{xcolor}
         \definecolor{lightgray}{gray}{0.9}
@@ -54,7 +57,12 @@ def new_phonebook(csv_file):
     latex_source = append_line(latex_source, r'\clearpage')
 
     # Rest
+    currently_on_page = 0
     for letter, group in rest:
+        if (currently_on_page+len(group)) > max_per_page:
+            latex_source = append_line(latex_source, r'\clearpage')
+            currently_on_page = 0
+
         latex_source = append_line(latex_source, r'\section*{'+letter+'}')
 
         latex_source = append_line(latex_source, r'\keepXColumns\begin{tabularx}{\textwidth}{X r}')
@@ -69,8 +77,14 @@ def new_phonebook(csv_file):
             elif row['cellular']:
                 cell = format_phone(row['cellular'])
                 latex_source = append_line(latex_source, r'%s & %s \\ ' % (name, cell))
+            if row['notes']:
+                latex_source = append_line(latex_source, r'\multicolumn{2}{r}{%s} \\ ' % (row['notes']))
+            currently_on_page += 1
         latex_source = append_line(latex_source, r'\end{tabularx}')
-        latex_source = append_line(latex_source, r'\clearpage')
+
+        if currently_on_page > min_per_page:
+            latex_source = append_line(latex_source, r'\clearpage')
+            currently_on_page = 0
 
     latex_source = append_line(latex_source, r'\end{document}')
 
